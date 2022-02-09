@@ -21,6 +21,7 @@ func NewService(ctx context.Context) (*Service, error) {
 type Buzzer struct {
 	GoSign chan bool
 	Expire time.Time
+	once   sync.Once
 }
 
 func (s *Service) LaneUp(ctx context.Context, key string, timeout time.Duration) (buzzer *Buzzer, goSign bool) {
@@ -44,18 +45,15 @@ func (s *Service) Done(ctx context.Context, key string) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("that lane has been closed")
-		}
-	}()
-
 	buzzer, ok := s.lanes[key]
 	if !ok {
 		return fmt.Errorf("not found in the wait lane")
 	}
 
-	close(buzzer.GoSign)
+	buzzer.once.Do(func() {
+		close(buzzer.GoSign)
+	})
+
 	delete(s.lanes, key)
 	return nil
 }
